@@ -1,0 +1,26 @@
+# Python sanal ortamları (Virtual Environments)
+venv/
+env/
+.venv/
+.env
+
+# Python önbellek dosyaları (Cache)
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Proje planı ve geçici metin dosyaları
+Summer School Foundry Local Plan (1).docx
+plan_text.txt
+models.txt
+
+# Veritabanı dosyaları (ileride kullanacağız)
+*.db
+*.sqlite
+*.sqlite3
+
+# Editör yapılandırmaları
+.vscode/
+.idea/
+.DS_Store

@@ -1,3 +1,4 @@
 foundry-local-sdk
 numpy
 streamlit
+asyncio
