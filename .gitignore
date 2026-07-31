@@ -9,13 +9,17 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.egg-info/
+dist/
+build/
 
 # Proje planı ve geçici metin dosyaları
 Summer School Foundry Local Plan (1).docx
 plan_text.txt
 models.txt
+docs/
 
-# Veritabanı dosyaları (ileride kullanacağız)
+# Veritabanı dosyaları
 *.db
 *.sqlite
 *.sqlite3
@@ -24,3 +28,9 @@ models.txt
 .vscode/
 .idea/
 .DS_Store
+*.swp
+*.swo
+*~
+
+# Agent yapılandırmaları
+.agents/
