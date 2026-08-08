@@ -1,4 +1,20 @@
-foundry-local-sdk
-numpy
-streamlit
-asyncio
+# Local RAG AI Assistant — Python Bağımlılıkları
+# Kurulum: pip install -r requirements.txt
+#
+# Not: asyncio Python standart kütüphanesinde zaten mevcut,
+#      ayrıca kurulması gerekmez.
+
+# Foundry Local SDK — Yerel LLM ve embedding çalıştırma (kontrol düzlemi SDK)
+foundry-local-sdk>=1.2.3
+
+# Streamlit — Web arayüzü
+streamlit>=1.22.0
+
+# Pytest — Otomatik test çalıştırma
+pytest>=7.0.0
+
+# Numpy — Sayısal hesaplamalar ve matris işlemleri
+numpy>=1.24.0
+
+# PyPDF — PDF belgelerini okuma
+pypdf>=3.0.0

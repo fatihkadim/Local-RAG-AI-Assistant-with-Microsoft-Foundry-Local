@@ -51,6 +51,15 @@ def _ensure_initialized():
             FoundryLocalManager.initialize(sdk_config)
             _manager = FoundryLocalManager.instance
 
+            # GPU/NPU hizlandirma icin execution provider'lari kaydet
+            # SDK otomatik olarak mevcut donanimı (CUDA, DirectML, OpenVINO vb.)
+            # tespit edip en uygun EP'yi indirir ve kaydeder.
+            try:
+                _manager.download_and_register_eps()
+                print("[GPU] Execution provider'lar kaydedildi (GPU/NPU hizlandirma aktif).")
+            except Exception as ep_err:
+                print(f"[GPU] EP kaydi basarisiz, CPU ile devam ediliyor: {ep_err}")
+
         # Embedding modelini indir (yoksa) ve yukle
         model = _manager.catalog.get_model(config.EMBEDDING_MODEL)
         model.download()
@@ -144,15 +153,23 @@ def get_embeddings_batch(texts):
 
     _ensure_initialized()
 
-    BATCH_SIZE = 32  # Bellek tasmasi onlemek icin
+    BATCH_SIZE = 8  # Bellek tasmasi ve ONNX bad allocation'i onlemek icin guvenli batch boyutu
     all_embeddings = []
 
     try:
         # Buyuk listeleri parcalar halinde isle
         for start in range(0, len(texts), BATCH_SIZE):
             batch = texts[start:start + BATCH_SIZE]
-            response = _embedding_client.generate_embeddings(batch)
-            batch_embeddings = [list(item.embedding) for item in response.data]
+            try:
+                response = _embedding_client.generate_embeddings(batch)
+                batch_embeddings = [list(item.embedding) for item in response.data]
+            except Exception:
+                # Toplu embedding ONNX bellek hatasi verirse (bad allocation), tek tek uret
+                batch_embeddings = []
+                for text_item in batch:
+                    response_single = _embedding_client.generate_embedding(text_item)
+                    batch_embeddings.append(list(response_single.data[0].embedding))
+
             all_embeddings.extend(batch_embeddings)
 
         return all_embeddings

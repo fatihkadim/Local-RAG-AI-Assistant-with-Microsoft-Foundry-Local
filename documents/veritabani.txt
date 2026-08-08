@@ -1,0 +1,35 @@
+Veritabani Yonetim Sistemleri
+
+Veritabani, yapilandirilmis verilerin organize bir sekilde saklandigi ve yonetildigi sistemlerdir. Veritabani yonetim sistemleri (VTYS), bu verilere erisim, ekleme, guncelleme ve silme islemlerini saglar.
+
+Iliskisel Veritabanlari (SQL)
+
+Iliskisel veritabanlari, verileri tablolar halinde saklar. Tablolar arasinda iliskiler (foreign key) kurulabilir. SQL (Structured Query Language), iliskisel veritabanlariyla etkilesim icin kullanilan standart dildir.
+
+Populer iliskisel veritabanlari: MySQL, PostgreSQL, SQLite, Microsoft SQL Server, Oracle.
+
+SQLite, sunucu gerektirmeyen, dosya tabanli hafif bir veritabani motorudur. Tek bir dosyada tum verileri saklar ve kurulum gerektirmez. Mobil uygulamalar, masaustu uygulamalari ve prototipler icin idealdir. Python'un standart kutuphanesinde sqlite3 modulu ile yerlesik olarak gelir.
+
+SQLite'in temel SQL komutlari:
+- CREATE TABLE: Yeni tablo olusturur
+- INSERT INTO: Tabloya veri ekler
+- SELECT: Tablodan veri sorgular
+- UPDATE: Mevcut veriyi gunceller
+- DELETE: Tablodan veri siler
+- WHERE: Sorgu kosulu belirler
+
+NoSQL Veritabanlari
+
+NoSQL veritabanlari, iliskisel olmayan veri modellerini kullanir. Buyuk olcekli, dagitik ve esnek veri yapilarinina ihtiyac duyuldugundan ortaya cikmistir.
+
+NoSQL veritabani turleri:
+- Dokuman tabanlı (MongoDB, CouchDB): JSON benzeri dokumanlar saklar
+- Anahtar-deger (Redis, DynamoDB): Basit key-value ciftle̊ri
+- Sutun ailesi (Cassandra, HBase): Buyuk veri setleri icin optimize
+- Graf (Neo4j, ArangoDB): Iliski agirlikli veriler icin
+
+Vektor Veritabanlari
+
+Vektor veritabanlari, yapay zeka uygulamalarinda kullanilan embedding vektorlerini saklamak ve hizli benzerlik aramasi yapmak icin tasarlanmistir. ChromaDB, Pinecone, Weaviate ve FAISS popular vektor veritabani cozumleridir.
+
+Bu projede, basitlik icin SQLite kullanarak embedding vektorlerini JSON formatinda sakliyoruz. Kucuk olcekli projeler icin bu yaklasim yeterlidir. Daha buyuk veri setleri icin ozel vektor veritabanlari daha uygun olacaktir.

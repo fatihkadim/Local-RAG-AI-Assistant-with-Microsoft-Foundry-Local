@@ -1,36 +1,91 @@
-# Python sanal ortamları (Virtual Environments)
+# ══════════════════════════════════════════════════════════
+# Python Sanal Ortamları 
+# ══════════════════════════════════════════════════════════
 venv/
 env/
 .venv/
-.env
+.env/
+ENV/
 
-# Python önbellek dosyaları (Cache)
+# ══════════════════════════════════════════════════════════
+# Python Önbellek ve Derleme Dosyaları
+# ══════════════════════════════════════════════════════════
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 *.pyo
 *.pyd
 *.egg-info/
+*.egg
 dist/
 build/
+*.whl
 
-# Proje planı ve geçici metin dosyaları
+# ══════════════════════════════════════════════════════════
+# Veritabanı Dosyaları 
+# ══════════════════════════════════════════════════════════
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# ══════════════════════════════════════════════════════════
+# Proje Planı ve Dahili Dokümanlar 
+# ══════════════════════════════════════════════════════════
 Summer School Foundry Local Plan (1).docx
 plan_text.txt
 models.txt
 docs/
 
-# Veritabanı dosyaları
-*.db
-*.sqlite
-*.sqlite3
+# ══════════════════════════════════════════════════════════
+# Foundry Local Model Dosyaları 
+# ══════════════════════════════════════════════════════════
+# Foundry Local modelleri genellikle kullanıcı dizininde saklanır
+# ama proje içinde oluşursa:
+*.onnx
+*.bin
+*.safetensors
+model_cache/
 
-# Editör yapılandırmaları
+# ══════════════════════════════════════════════════════════
+# IDE / Editör Yapılandırmaları
+# ══════════════════════════════════════════════════════════
 .vscode/
 .idea/
-.DS_Store
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
 
-# Agent yapılandırmaları
+# ══════════════════════════════════════════════════════════
+# İşletim Sistemi Dosyaları
+# ══════════════════════════════════════════════════════════
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ══════════════════════════════════════════════════════════
+# Test ve Hata Ayıklama Çıktıları
+# ══════════════════════════════════════════════════════════
+*.log
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/
+
+# ══════════════════════════════════════════════════════════
+# Ortam Değişkenleri 
+# ══════════════════════════════════════════════════════════
+.env
+*.env
+
+# ══════════════════════════════════════════════════════════
+# Agent / AI Araç Yapılandırmaları
+# ══════════════════════════════════════════════════════════
 .agents/
+.gemini/
+.claude/
