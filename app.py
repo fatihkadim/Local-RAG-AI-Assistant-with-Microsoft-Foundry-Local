@@ -9,10 +9,10 @@ Kullanım:
 import streamlit as st
 import time
 
-import config
-import database
-import retrieval
-import llm
+from src import config
+from src import database
+from src import retrieval
+from src import llm
 
 
 # ── Sayfa Ayarları ────────────────────────────────────────────
@@ -58,21 +58,19 @@ with st.sidebar:
     st.header("⚙️ Ayarlar")
     st.markdown(f"**Chat Modeli:** `{config.CHAT_MODEL}`")
     st.markdown(f"**Embedding Modeli:** `{config.EMBEDDING_MODEL}`")
-    st.markdown(f"**Veritabanı:** `{config.DATABASE_PATH}`")
+    st.markdown(f"**Veritabanı (Qdrant):** `{config.QDRANT_URL}`")
     st.markdown(f"**Top-K:** `{config.TOP_K}`")
 
     st.divider()
 
     # Veritabanı durumu
     try:
-        all_chunks = database.get_all_chunks()
-        chunk_count = len(all_chunks)
-        sources = set(c["source_file"] for c in all_chunks)
-        st.success(f"📊 {chunk_count} parça, {len(sources)} belge")
+        chunk_count = database.get_chunk_count()
+        sources = database.get_sources()
+        st.success(f"📊 {chunk_count} parça, {len(sources)} kaynak")
         with st.expander("📁 Yüklü Belgeler"):
             for src in sorted(sources):
-                count = sum(1 for c in all_chunks if c["source_file"] == src)
-                st.markdown(f"- `{src}` ({count} parça)")
+                st.markdown(f"- `{src}`")
     except Exception:
         st.warning("⚠️ Veritabanı bulunamadı!")
         st.markdown("Önce çalıştırın:\n```\npython main.py --ingest\n```")
@@ -116,8 +114,8 @@ if prompt := st.chat_input("Sorunuzu yazın..."):
     with st.chat_message("assistant"):
         # Veritabanı kontrolü
         try:
-            all_chunks = database.get_all_chunks()
-            if not all_chunks:
+            chunk_count = database.get_chunk_count()
+            if not chunk_count:
                 st.warning(
                     "⚠️ Veritabanı boş! Önce belgeleri yükleyin:\n"
                     "`python main.py --ingest`"

@@ -1,3 +1,6 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 """
 Sprint 3 -- ingestion.py + retrieval.py Manuel Test Scripti
 
@@ -14,7 +17,7 @@ import sys
 import math
 
 # Test icin mevcut veritabanini temizle
-import config
+from src import config
 if os.path.exists(config.DATABASE_PATH):
     os.remove(config.DATABASE_PATH)
     print(f"[TEMIZLIK] Eski {config.DATABASE_PATH} silindi.\n")
@@ -37,7 +40,7 @@ print("=" * 60)
 print("TEST 1: load_documents() -- Belge okuma")
 print("=" * 60)
 
-import ingestion
+from src import ingestion
 
 docs = ingestion.load_documents()
 test("Belgeler yuklendi (None degil)", docs is not None)
@@ -103,7 +106,7 @@ print(f"  [INFO] {stats['documents_loaded']} belge, {stats['total_chunks']} parc
 print(f"  [INFO] Dosyalar: {', '.join(stats['files'])}")
 
 # DB'de gercekten veri var mi?
-import database
+from src import database
 all_chunks = database.get_all_chunks()
 test("DB'deki parca sayisi stats ile eslesir",
      len(all_chunks) == stats["total_chunks"],
@@ -126,7 +129,7 @@ print("=" * 60)
 print("TEST 4: cosine_similarity() -- Vektor benzerligi")
 print("=" * 60)
 
-import retrieval
+from src import retrieval
 
 # Ayni vektor -> similarity = 1.0
 vec = [1.0, 2.0, 3.0]

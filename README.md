@@ -35,7 +35,7 @@ Kullanıcı Sorusu
 
 ─────────────────────────────────────────────────────
 Belge Yükleme (tek seferlik):
-[ingestion.py]  →  Oku → Parçala → Embed et → [database.py] SQLite'a kaydet
+[ingestion.py]  →  Oku → Parçala → Embed et → [database.py] Qdrant'a kaydet
 ```
 
 ### Proje Dosya Yapısı
@@ -82,19 +82,27 @@ git clone https://github.com/fatihkadim/Local-RAG-AI-Assistant-with-Microsoft-Fo
 cd Local-RAG-AI-Assistant-with-Microsoft-Foundry-Local
 ```
 
-### 2. Sanal ortam oluştur ve aktifleştir
+### 2. Proje kurulumu ve bağımlılıklar (uv)
+
+Bu proje paket yönetimi için hızlandırılmış `uv` kullanmaktadır. `uv` ile saniyeler içinde kurulum yapabilirsiniz:
 
 ```bash
-python -m venv venv
+# Eğer kurulu değilse uv kurun
+pip install uv
 
-# Windows
-.\venv\Scripts\Activate.ps1
+# Sanal ortam oluşturup tüm paketleri (Qdrant, PyMuPDF, Streamlit, vb.) yükle
+uv sync
+
+# Sanal ortamı aktifleştir (Windows)
+.\.venv\Scripts\activate
 ```
 
-### 3. Bağımlılıkları yükle
+### 3. Qdrant Vektör Veritabanını Başlat (Docker Desktop)
+
+Vektör arama işlemleri için Qdrant lokal container olarak çalıştırılmalıdır. Kurulumu kolaylaştırmak için projede hazır bir yapılandırma dosyası bulunmaktadır:
 
 ```bash
-pip install -r requirements.txt
+docker-compose up -d
 ```
 
 ### 4. Microsoft Foundry Local'ı yükle ve başlat
@@ -164,7 +172,8 @@ Tüm ayarlar [`config.py`](config.py) üzerinden yönetilir:
 |---|---|---|
 | `CHAT_MODEL` | `phi-3.5-mini` | Foundry Local chat modeli alias'ı |
 | `EMBEDDING_MODEL` | `qwen3-embedding-0.6b` | Embedding modeli alias'ı |
-| `DATABASE_PATH` | `knowledge_base.db` | SQLite veritabanı dosya yolu |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant Docker API adresi |
+| `QDRANT_COLLECTION` | `documents` | Qdrant üzerinde kullanılacak koleksiyon adı |
 | `DOCUMENTS_DIR` | `documents` | Belgelerin bulunduğu klasör |
 | `CHUNK_SIZE` | `500` | Belge parçası karakter uzunluğu |
 | `CHUNK_OVERLAP` | `50` | Parçalar arası örtüşme (karakter) |
@@ -197,7 +206,7 @@ python test_sprint4.py
 | [Microsoft Foundry Local](https://aka.ms/foundry-local) | Yerelde LLM ve embedding çalıştırma |
 | [Phi-3.5-mini](https://huggingface.co/microsoft/Phi-3.5-mini-instruct) | Cevap üretme (chat modeli) |
 | [Qwen3-Embedding-0.6b](https://huggingface.co/Qwen/Qwen3-Embedding) | Semantik vektör temsili |
-| SQLite (`sqlite3`) | Vektör ve metadata depolama |
+| Qdrant (Docker) | Vektör veritabanı ve semantik arama |
 | [Streamlit](https://streamlit.io) | Web arayüzü |
 | Python 3.10+ | Ana geliştirme dili |
 

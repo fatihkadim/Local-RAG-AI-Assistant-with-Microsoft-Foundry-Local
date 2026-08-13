@@ -7,27 +7,25 @@ Retrieval modülünden gelen bağlam (context) ve kullanıcı sorusu
 birleştirilerek yerel LLM'e gönderilir, model cevap üretir.
 
 Kullanım:
-    from llm import generate_answer
+    from src.llm import generate_answer
 
     cevap = generate_answer("Python nedir?", baglam_metni)
     print(cevap)
 """
 
-from foundry_local_sdk import Configuration, FoundryLocalManager
-
-import config
+from src import config
+from src.sdk_manager import get_manager
 
 # ── Modül Seviyesi Değişkenler (Lazy Initialization) ─────────
-_manager = None
 _chat_client = None
 
 
 def _ensure_initialized():
     """
-    Foundry Local SDK'yı ve chat modelini başlatır (lazy init).
+    Chat modelini başlatır (lazy init).
 
     İlk çağrıldığında:
-    1. FoundryLocalManager'ı initialize eder (eğer henüz yapılmadıysa)
+    1. SDK manager'dan FoundryLocalManager instance'ını alır
     2. Chat modelini (config.CHAT_MODEL) indirir ve yükler
     3. ChatClient'ı oluşturur
 
@@ -36,35 +34,17 @@ def _ensure_initialized():
     Raises:
         RuntimeError: SDK initialize edilemezse veya model yüklenemezse.
     """
-    global _manager, _chat_client
+    global _chat_client
 
     if _chat_client is not None:
         return
 
     try:
-        # SDK'yı initialize et (sadece ilk seferde)
-        # Not: FoundryLocalManager singleton'dır. embeddings.py zaten
-        # initialize etmiş olabilir, bu durumda mevcut instance kullanılır.
-        if _manager is None:
-            try:
-                sdk_config = Configuration(app_name="local-rag-assistant")
-                FoundryLocalManager.initialize(sdk_config)
-            except Exception:
-                # Zaten initialize edilmiş (embeddings.py tarafından) — sorun yok
-                pass
-
-            _manager = FoundryLocalManager.instance
-
-            # GPU/NPU hızlandırma için execution provider'ları kaydet
-            try:
-                _manager.download_and_register_eps()
-                print("[GPU] Execution provider'lar kaydedildi (GPU/NPU hızlandırma aktif).")
-            except Exception as ep_err:
-                print(f"[GPU] EP kaydı başarısız, CPU ile devam ediliyor: {ep_err}")
+        manager = get_manager()
 
         # Chat modelini indir (yoksa) ve yükle
         try:
-            model = _manager.catalog.get_model(config.CHAT_MODEL)
+            model = manager.catalog.get_model(config.CHAT_MODEL)
             model.download()
             model.load()
         except Exception as load_err:
@@ -78,7 +58,7 @@ def _ensure_initialized():
             loaded = False
             for fb_name in fallback_models:
                 try:
-                    model = _manager.catalog.get_model(fb_name)
+                    model = manager.catalog.get_model(fb_name)
                     model.download()
                     model.load()
                     loaded = True
@@ -108,12 +88,31 @@ def _clean_response(text: str) -> str:
     if not text:
         return ""
 
-    # Modelin şablon taklidi yaparak kendisini tekrarlamasını önlemek için ilk kesim noktası
-    for stop_pattern in ["Sorunu cevaplayın:", "\nParça:", "\nSoru:", "Soruyu cevaplayın:"]:
+    # Modelin şablon taklidi yaparak kendisini tekrarlamasını önlemek için kesim noktaları
+    stop_patterns = [
+        "Sorunu cevaplayın:",
+        "Soruyu cevaplayın:",
+        "\nParça:",
+        "\nSoru:",
+        "\nCevap:",
+        "\nSon cevabı:",
+        "\nKaynak:",
+        "\nParca:",
+        "\n[Kaynak:",
+        "\n--- BAĞLAM",
+        "\n--- BAGLAM",
+    ]
+    for stop_pattern in stop_patterns:
         if stop_pattern in text:
             text = text.split(stop_pattern)[0]
 
-    return text.strip()
+    # Eğer temizlemeden sonra çok kısa veya boş kaldıysa,
+    # orijinal metnin ilk anlamlı cümlesini almayı dene
+    cleaned = text.strip()
+    if len(cleaned) < 5:
+        return cleaned if cleaned else ""
+
+    return cleaned
 
 
 def generate_answer(query, context):
@@ -140,7 +139,7 @@ def generate_answer(query, context):
         RuntimeError: Model yüklenemezse veya cevap üretilemezse.
 
     Örnek:
-        >>> from retrieval import get_top_chunks, format_context
+        >>> from src.retrieval import get_top_chunks, format_context
         >>> chunks = get_top_chunks("Python nedir?")
         >>> context = format_context(chunks)
         >>> cevap = generate_answer("Python nedir?", context)

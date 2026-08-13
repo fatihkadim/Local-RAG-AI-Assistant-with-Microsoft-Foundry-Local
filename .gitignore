@@ -30,6 +30,8 @@ build/
 *.db-journal
 *.db-wal
 *.db-shm
+qdrant_storage/
+
 
 # ══════════════════════════════════════════════════════════
 # Proje Planı ve Dahili Dokümanlar 

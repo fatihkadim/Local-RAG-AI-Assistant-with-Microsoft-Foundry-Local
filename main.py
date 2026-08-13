@@ -18,11 +18,11 @@ import time
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-import config
-import database
-import ingestion
-import retrieval
-import llm
+from src import config
+from src import database
+from src import ingestion
+from src import retrieval
+from src import llm
 
 
 def run_ingest():
@@ -64,8 +64,8 @@ def ask_question(query):
     """
     # Veritabanı kontrolü
     try:
-        all_chunks = database.get_all_chunks()
-        if not all_chunks:
+        chunk_count = database.get_chunk_count()
+        if not chunk_count:
             return (
                 "⚠️ Veritabanı boş! Önce belgeleri yükleyin:\n"
                 "   python main.py --ingest"
@@ -121,7 +121,7 @@ def run_cli():
     print("  Microsoft Foundry Local ile çalışır (tamamen offline)")
     print("═" * 60)
     print(f"  Model  : {config.CHAT_MODEL}")
-    print(f"  DB     : {config.DATABASE_PATH}")
+    print(f"  DB     : {config.QDRANT_URL} ({config.QDRANT_COLLECTION})")
     print(f"  Top-K  : {config.TOP_K}")
     print("─" * 60)
     print("  Çıkmak için: 'çık', 'exit' veya 'q' yazın")
@@ -129,12 +129,12 @@ def run_cli():
 
     # Veritabanı kontrolü
     try:
-        all_chunks = database.get_all_chunks()
-        if not all_chunks:
+        chunk_count = database.get_chunk_count()
+        if not chunk_count:
             print("⚠️ Veritabanı boş! Önce belgeleri yükleyin:")
             print("   python main.py --ingest\n")
             return
-        print(f"📊 Veritabanında {len(all_chunks)} belge parçası mevcut.\n")
+        print(f"📊 Veritabanında {chunk_count} belge parçası mevcut.\n")
     except Exception:
         print("⚠️ Veritabanı bulunamadı! Önce belgeleri yükleyin:")
         print("   python main.py --ingest\n")

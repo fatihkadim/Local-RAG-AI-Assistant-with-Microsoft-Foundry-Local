@@ -1,3 +1,6 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 """
 Sprint 1 — database.py Manuel Test Scripti
 
@@ -13,12 +16,12 @@ import os
 import sys
 
 # Test için mevcut veritabanı dosyasını temizle
-import config
+from src import config
 if os.path.exists(config.DATABASE_PATH):
     os.remove(config.DATABASE_PATH)
     print(f"[TEMIZLIK] Eski {config.DATABASE_PATH} silindi.\n")
 
-import database
+from src import database
 
 PASSED = 0
 FAILED = 0

@@ -4,7 +4,7 @@ documents/ klasorundeki belgeleri okur, parcalara boler,
 embedding'lerini hesaplar ve SQLite'a kaydeder.
 
 Kullanim:
-    from ingestion import ingest_all
+    from src.ingestion import ingest_all
 
     stats = ingest_all()
     print(f"{stats['total_chunks']} parca yuklendi.")
@@ -13,9 +13,9 @@ Kullanim:
 import os
 import glob
 
-import config
-import database
-import embeddings
+from src import config
+from src import database
+from src import embeddings
 
 
 # ── Belge Yukleme ─────────────────────────────────────────────
@@ -61,10 +61,10 @@ def load_documents(directory=None):
             try:
                 if ext == ".pdf":
                     try:
-                        import pypdf
-                        reader = pypdf.PdfReader(filepath)
+                        import pymupdf
+                        doc = pymupdf.open(filepath)
                         page_texts = [
-                            page.extract_text() for page in reader.pages if page.extract_text()
+                            page.get_text() for page in doc
                         ]
                         content = "\n\n".join(page_texts).strip()
                         if not content:
@@ -99,6 +99,46 @@ def load_documents(directory=None):
         )
 
     return documents
+
+
+# ── Chunk Kalite Filtresi ─────────────────────────────────────
+
+def _is_quality_chunk(text):
+    """
+    Bir metin parcasinin yeterli kalitede olup olmadigini kontrol eder.
+    Bozuk PDF metinleri, matematik formulleri, XML tag'leri gibi
+    anlamsiz icerikleri filtreler.
+
+    Returns:
+        bool: True ise parca kaliteli, False ise atlanmali.
+    """
+    if not text or len(text.strip()) < 20:
+        return False
+
+    # Alfanumerik karakter oranini hesapla
+    alnum_count = sum(1 for c in text if c.isalnum() or c.isspace())
+    total_count = len(text)
+    if total_count == 0:
+        return False
+
+    alnum_ratio = alnum_count / total_count
+
+    # Cok fazla ozel karakter varsa (formul, bozuk metin)
+    if alnum_ratio < 0.5:
+        return False
+
+    # XML/markup tag'leri iceriyorsa
+    markup_indicators = ["[open]", "[close]", "[sep]", "<sep>", "end_of_msg", "role=\""]
+    markup_count = sum(1 for ind in markup_indicators if ind in text.lower())
+    if markup_count >= 2:
+        return False
+
+    # En az 3 kelime icermeli (anlamli metin)
+    words = text.split()
+    if len(words) < 3:
+        return False
+
+    return True
 
 
 # ── Metin Parcalama (Chunking) ────────────────────────────────
@@ -159,7 +199,7 @@ def chunk_text(text, source_file, chunk_size=None, chunk_overlap=None):
 
         chunk_text_piece = text[start:end].strip()
 
-        if chunk_text_piece:  # Bos parca ekleme
+        if chunk_text_piece and _is_quality_chunk(chunk_text_piece):
             chunks.append({
                 "text": chunk_text_piece,
                 "source_file": source_file,
@@ -205,10 +245,10 @@ def ingest_all(directory=None, clear_existing=True):
 
     # 1. Veritabanini hazirla
     print("\n[1/4] Veritabani hazirlaniyor...")
-    database.init_db()
     if clear_existing:
         database.clear_db()
         print("  [OK] Mevcut veriler temizlendi.")
+    database.init_db()
 
     # 2. Belgeleri oku
     print(f"\n[2/4] Belgeler okunuyor ({directory or config.DOCUMENTS_DIR})...")

@@ -1,3 +1,6 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 """
 Sprint 4 -- llm.py + main.py + app.py Manuel Test Scripti
 
@@ -43,8 +46,8 @@ print("=" * 60)
 print("ÖN KONTROL: Veritabanı durumu")
 print("=" * 60)
 
-import config
-import database
+from src import config
+from src import database
 
 database.init_db()
 all_chunks = database.get_all_chunks()
@@ -52,7 +55,7 @@ all_chunks = database.get_all_chunks()
 if not all_chunks:
     print("  [UYARI] Veritabanı boş! Önce ingestion çalıştırılıyor...")
     print("  Bu işlem biraz sürebilir (embedding hesaplanacak)...\n")
-    import ingestion
+    from src import ingestion
     stats = ingestion.ingest_all()
     all_chunks = database.get_all_chunks()
 
@@ -67,7 +70,7 @@ print("=" * 60)
 print("TEST 1: llm modülü import ve temel kontroller")
 print("=" * 60)
 
-import llm
+from src import llm
 
 test("llm modülü import edildi", True)
 test("generate_answer fonksiyonu var", hasattr(llm, "generate_answer"))
@@ -116,7 +119,7 @@ print("TEST 3: generate_answer() — Gerçek cevap üretimi")
 print("=" * 60)
 print("  [INFO] LLM modeli yükleniyor (ilk seferde biraz sürebilir)...\n")
 
-import retrieval
+from src import retrieval
 
 # Test sorusu 1: Python hakkında
 query1 = "Python programlama dili nedir?"

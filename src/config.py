@@ -8,7 +8,8 @@ CHAT_MODEL = "phi-3.5-mini"                        # Sohbet modeli alias'ı (cat
 EMBEDDING_MODEL = "qwen3-embedding-0.6b"           # Embedding modeli alias'ı
 
 # ── Veritabanı Ayarları ──────────────────────────────────
-DATABASE_PATH = "knowledge_base.db"    # SQLite veritabanı dosya yolu
+QDRANT_URL = "http://localhost:6333"       # Qdrant Docker adresi
+QDRANT_COLLECTION = "documents"            # Qdrant koleksiyon adı
 
 # ── Belge İşleme Ayarları ────────────────────────────────
 DOCUMENTS_DIR = "documents"            # Belgelerin bulunduğu klasör

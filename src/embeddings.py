@@ -8,29 +8,26 @@ Ingestion pipeline (Sprint 3) ve retrieval sistemi (Sprint 4)
 bu servise bagimlidir.
 
 Kullanim:
-    from embeddings import get_embedding, get_embeddings_batch
+    from src.embeddings import get_embedding, get_embeddings_batch
 
     vektor = get_embedding("Merhaba dunya")
     vektorler = get_embeddings_batch(["metin1", "metin2", "metin3"])
 """
 
-from foundry_local_sdk import Configuration, FoundryLocalManager
-
-import config
+from src import config
+from src.sdk_manager import get_manager
 
 # ── Modul Seviyesi Degiskenler (Lazy Initialization) ─────────
-# Manager ve embedding client ilk kullanimda olusturulur.
-# Her cagirildiginda yeniden initialize etmemek icin burada tutulur.
-_manager = None
+# Embedding client ilk kullanimda olusturulur.
 _embedding_client = None
 
 
 def _ensure_initialized():
     """
-    Foundry Local SDK'yi ve embedding modelini baslatir (lazy init).
+    Embedding modelini baslatir (lazy init).
 
     Ilk cagirildinginda:
-    1. FoundryLocalManager'i initialize eder
+    1. SDK manager'dan FoundryLocalManager instance'ini alir
     2. Embedding modelini (config.EMBEDDING_MODEL) yukler
     3. EmbeddingClient'i olusturur
 
@@ -39,29 +36,16 @@ def _ensure_initialized():
     Raises:
         RuntimeError: SDK initialize edilemezse veya model yuklenemezse.
     """
-    global _manager, _embedding_client
+    global _embedding_client
 
     if _embedding_client is not None:
         return
 
     try:
-        # SDK'yi initialize et (sadece ilk seferde)
-        if _manager is None:
-            sdk_config = Configuration(app_name="local-rag-assistant")
-            FoundryLocalManager.initialize(sdk_config)
-            _manager = FoundryLocalManager.instance
-
-            # GPU/NPU hizlandirma icin execution provider'lari kaydet
-            # SDK otomatik olarak mevcut donanimı (CUDA, DirectML, OpenVINO vb.)
-            # tespit edip en uygun EP'yi indirir ve kaydeder.
-            try:
-                _manager.download_and_register_eps()
-                print("[GPU] Execution provider'lar kaydedildi (GPU/NPU hizlandirma aktif).")
-            except Exception as ep_err:
-                print(f"[GPU] EP kaydi basarisiz, CPU ile devam ediliyor: {ep_err}")
+        manager = get_manager()
 
         # Embedding modelini indir (yoksa) ve yukle
-        model = _manager.catalog.get_model(config.EMBEDDING_MODEL)
+        model = manager.catalog.get_model(config.EMBEDDING_MODEL)
         model.download()
         model.load()
 

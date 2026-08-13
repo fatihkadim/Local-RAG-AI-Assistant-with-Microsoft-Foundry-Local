@@ -1,3 +1,6 @@
+import os
+import sys
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 """
 Sprint 2 -- embeddings.py Manuel Test Scripti
 
@@ -42,7 +45,7 @@ print("=" * 60)
 print("TEST 1: get_embedding() -- Tek metin embedding")
 print("=" * 60)
 
-import embeddings
+from src import embeddings
 
 embedding1 = embeddings.get_embedding("Python bir programlama dilidir.")
 test("Embedding dondu (None degil)", embedding1 is not None)
