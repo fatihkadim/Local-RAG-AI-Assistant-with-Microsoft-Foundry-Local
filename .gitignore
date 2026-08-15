@@ -31,6 +31,7 @@ build/
 *.db-wal
 *.db-shm
 qdrant_storage/
+.ingestion_cache.json
 
 
 # ══════════════════════════════════════════════════════════
@@ -40,6 +41,8 @@ Summer School Foundry Local Plan (1).docx
 plan_text.txt
 models.txt
 docs/
+documents/*
+!documents/.gitkeep
 
 # ══════════════════════════════════════════════════════════
 # Foundry Local Model Dosyaları 
@@ -91,3 +94,14 @@ htmlcov/
 .agents/
 .gemini/
 .claude/
+
+# ══════════════════════════════════════════════════════════
+# Rust Build Artifacts
+# ══════════════════════════════════════════════════════════
+target/
+rust_parser/target/
+*.so
+*.dylib
+*.dll
+*.pdb
+# *.pyd is already listed above (Python section)

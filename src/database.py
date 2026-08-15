@@ -11,7 +11,7 @@ import uuid
 from src import config
 
 # Qdrant client'ı başlat
-client = QdrantClient(url=config.QDRANT_URL)
+client = QdrantClient(url=config.QDRANT_URL, check_compatibility=False)
 
 
 def init_db():
@@ -82,6 +82,73 @@ def insert_chunk(text, embedding, source_file, chunk_index):
         raise RuntimeError(f"Qdrant'a chunk eklenemedi: {e}") from e
 
 
+def insert_chunks_batch(chunks_data):
+    """
+    Birden fazla belge parçasını tek bir toplu (bulk) işlemle Qdrant'a ekler.
+    Tek tek HTTP istekleri atmak yerine tek bir ağ çağrısında kaydeder (10x-50x daha hızlı).
+    
+    Args:
+        chunks_data (list[dict]): Her eleman şu anahtarları içermelidir:
+            - "text" (str)
+            - "embedding" (list[float])
+            - "source_file" (str)
+            - "chunk_index" (int)
+    """
+    if not chunks_data:
+        return
+
+    points = []
+    for item in chunks_data:
+        point_id = str(uuid.uuid4())
+        payload = {
+            "text": item["text"],
+            "source_file": item["source_file"],
+            "chunk_index": item["chunk_index"]
+        }
+        points.append(
+            models.PointStruct(
+                id=point_id,
+                vector=item["embedding"],
+                payload=payload
+            )
+        )
+
+    try:
+        # 100'erli paketler halinde upsert et (büyük listelerde güvenli bellek yönetimi)
+        BATCH_SIZE = 100
+        for i in range(0, len(points), BATCH_SIZE):
+            batch = points[i:i + BATCH_SIZE]
+            client.upsert(
+                collection_name=config.QDRANT_COLLECTION,
+                points=batch
+            )
+    except Exception as e:
+        raise RuntimeError(f"Qdrant'a toplu chunk eklenemedi: {e}") from e
+
+
+def delete_file_chunks(source_file):
+    """
+    Belirli bir dosyaya ait tüm parça ve embedding'leri Qdrant'tan siler.
+    (Dosya güncellendiğinde veya silindiğinde kullanılır)
+    """
+    try:
+        client.delete(
+            collection_name=config.QDRANT_COLLECTION,
+            points_selector=models.FilterSelector(
+                filter=models.Filter(
+                    must=[
+                        models.FieldCondition(
+                            key="source_file",
+                            match=models.MatchValue(value=source_file)
+                        )
+                    ]
+                )
+            )
+        )
+    except Exception as e:
+        raise RuntimeError(f"'{source_file}' kaynaklı parçalar silinemedi: {e}") from e
+
+
 def get_chunk_count():
     try:
         response = client.count(collection_name=config.QDRANT_COLLECTION, exact=True)
@@ -89,11 +156,21 @@ def get_chunk_count():
     except Exception:
         return 0
 
+
 def get_sources():
+    """Qdrant'taki tüm yüklü belgelerin benzersiz dosya adlarını döndürür."""
     try:
-        # Simplified for now, just return a dummy list since Qdrant doesn't have an easy way to get distinct fields without scroll
-        # A more robust way would be scroll API, but for now let's just bypass it for UI
-        return ["Qdrant Vektör Veritabanı"]
+        records, _ = client.scroll(
+            collection_name=config.QDRANT_COLLECTION,
+            limit=1000,
+            with_payload=["source_file"],
+            with_vectors=False
+        )
+        sources = set()
+        for rec in records:
+            if rec.payload and "source_file" in rec.payload:
+                sources.add(rec.payload["source_file"])
+        return list(sources)
     except Exception:
         return []
 

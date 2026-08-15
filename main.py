@@ -2,6 +2,10 @@
 Local RAG AI Assistant — Ana Giriş Noktası (CLI modu)
 Microsoft Foundry Local ile tamamen offline çalışan Q&A chatbot.
 
+Desteklenen dosya formatları:
+    .txt, .md, .pdf, .docx, .pptx, .html, .htm, .csv, .tsv,
+    .xlsx, .xls, .epub, .json, .jsonl, .rst
+
 Kullanım:
     python main.py --ingest     → Belgeleri yükle ve veritabanını oluştur
     python main.py              → Soru-Cevap modunu başlat (CLI)
@@ -25,15 +29,15 @@ from src import retrieval
 from src import llm
 
 
-def run_ingest():
+def run_ingest(force=False):
     """
     Ingestion pipeline'ını çalıştırır.
     documents/ klasöründeki belgeleri okur, parçalar,
-    embedding hesaplar ve SQLite'a kaydeder.
+    embedding hesaplar ve Qdrant'a kaydeder.
     """
     try:
-        stats = ingestion.ingest_all()
-        print(f"\n✅ Ingestion tamamlandı: {stats['total_chunks']} parça yüklendi.")
+        stats = ingestion.ingest_all(clear_existing=force)
+        print(f"\n✅ Ingestion tamamlandı: Toplam {stats['total_chunks']} parça veritabanında.")
         return True
     except FileNotFoundError as e:
         print(f"\n❌ Hata: {e}")
@@ -182,7 +186,12 @@ def main():
     parser.add_argument(
         "--ingest",
         action="store_true",
-        help="Belgeleri yükle ve veritabanını oluştur"
+        help="Belgeleri yükle (akıllı artımlı mod - sadece yeni/değişen belgeler işlenir)"
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="--ingest ile birlikte kullanılırsa tüm veritabanını ve önbelleği sıfırlayıp baştan yükler"
     )
     parser.add_argument(
         "-q", "--query",
@@ -197,7 +206,7 @@ def main():
 
     # --ingest modu
     if args.ingest:
-        success = run_ingest()
+        success = run_ingest(force=args.force)
         if not success:
             sys.exit(1)
 

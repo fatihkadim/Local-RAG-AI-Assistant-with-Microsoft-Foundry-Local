@@ -13,6 +13,19 @@ QDRANT_COLLECTION = "documents"            # Qdrant koleksiyon adı
 
 # ── Belge İşleme Ayarları ────────────────────────────────
 DOCUMENTS_DIR = "documents"            # Belgelerin bulunduğu klasör
+
+# Desteklenen dosya uzantıları (Rust parser + Python fallback)
+SUPPORTED_EXTENSIONS = [
+    ".txt", ".md", ".pdf",                     # Temel metin formatları
+    ".docx", ".pptx",                          # Microsoft Office
+    ".html", ".htm",                           # Web sayfaları
+    ".csv", ".tsv",                            # Tablolu veri
+    ".xlsx", ".xls",                           # Excel
+    ".epub",                                   # E-kitap
+    ".json", ".jsonl",                         # Yapısal veri
+    ".rst",                                    # reStructuredText
+]
+
 CHUNK_SIZE = 500                       # Her belge parçasının yaklaşık karakter uzunluğu
 CHUNK_OVERLAP = 50                     # Parçalar arası örtüşme (bağlam kaybını önler)
 

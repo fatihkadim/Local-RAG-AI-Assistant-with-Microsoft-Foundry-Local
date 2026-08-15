@@ -137,7 +137,7 @@ def get_embeddings_batch(texts):
 
     _ensure_initialized()
 
-    BATCH_SIZE = 8  # Bellek tasmasi ve ONNX bad allocation'i onlemek icin guvenli batch boyutu
+    BATCH_SIZE = 32  # GPU/NPU paralelizasyonu icin optimize edilmis batch boyutu
     all_embeddings = []
 
     try:
@@ -148,11 +148,18 @@ def get_embeddings_batch(texts):
                 response = _embedding_client.generate_embeddings(batch)
                 batch_embeddings = [list(item.embedding) for item in response.data]
             except Exception:
-                # Toplu embedding ONNX bellek hatasi verirse (bad allocation), tek tek uret
+                # Toplu embedding ONNX bellek hatasi verirse daha kucuk (8'lik) batch dene
                 batch_embeddings = []
-                for text_item in batch:
-                    response_single = _embedding_client.generate_embedding(text_item)
-                    batch_embeddings.append(list(response_single.data[0].embedding))
+                SUB_BATCH = 8
+                for sub_start in range(0, len(batch), SUB_BATCH):
+                    sub_batch = batch[sub_start:sub_start + SUB_BATCH]
+                    try:
+                        resp = _embedding_client.generate_embeddings(sub_batch)
+                        batch_embeddings.extend([list(item.embedding) for item in resp.data])
+                    except Exception:
+                        for text_item in sub_batch:
+                            response_single = _embedding_client.generate_embedding(text_item)
+                            batch_embeddings.append(list(response_single.data[0].embedding))
 
             all_embeddings.extend(batch_embeddings)
 

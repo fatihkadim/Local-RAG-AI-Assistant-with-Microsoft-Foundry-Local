@@ -10,5 +10,11 @@ dependencies = [
     "pytest>=7.0.0",
     "numpy>=1.24.0",
     "pymupdf>=1.24.0",
-    "qdrant-client>=1.9.0"
+    "qdrant-client>=1.9.0",
+    # Python fallback parser'lar (Rust parser yoksa kullanilir)
+    "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
+    "beautifulsoup4>=4.12.0",
+    "openpyxl>=3.1.0",
+    "ebooklib>=0.18",
 ]
