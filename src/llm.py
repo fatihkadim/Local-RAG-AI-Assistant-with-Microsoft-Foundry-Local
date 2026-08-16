@@ -115,35 +115,23 @@ def _clean_response(text: str) -> str:
     return cleaned
 
 
-def generate_answer(query, context):
+from src.telemetry import trace_span
+import time
+
+
+def generate_answer(query, context, trace_ctx=None):
     """
     Kullanıcı sorusunu, verilen bağlam bilgisiyle birleştirerek
     yerel LLM'den cevap üretir.
-
-    RAG pipeline'ının son adımıdır:
-    1. System prompt (config.SYSTEM_PROMPT) ile modele rolünü tanımlar
-    2. Bağlam bilgisini (retrieval'dan gelen parçalar) ekler
-    3. Kullanıcı sorusunu gönderir
-    4. Modelin cevabını döndürür
+    OpenTelemetry span'i ve gecikme takibi ile izlenir.
 
     Args:
         query (str): Kullanıcının sorusu.
         context (str): Retrieval modülünden gelen formatlanmış bağlam metni.
-                       retrieval.format_context() çıktısı beklenir.
+        trace_ctx (QueryTraceContext, optional): Canlı tracing bağlamı.
 
     Returns:
         str: LLM'in ürettiği cevap metni.
-
-    Raises:
-        ValueError: query veya context None/boş ise.
-        RuntimeError: Model yüklenemezse veya cevap üretilemezse.
-
-    Örnek:
-        >>> from src.retrieval import get_top_chunks, format_context
-        >>> chunks = get_top_chunks("Python nedir?")
-        >>> context = format_context(chunks)
-        >>> cevap = generate_answer("Python nedir?", context)
-        >>> print(cevap)
     """
     if query is None or not query.strip():
         raise ValueError("Soru (query) boş olamaz.")
@@ -152,7 +140,6 @@ def generate_answer(query, context):
 
     _ensure_initialized()
 
-    # Kullanıcı mesajını bağlam ile birleştir
     user_message = (
         f"Aşağıdaki bağlam bilgilerini kullanarak soruyu cevapla.\n\n"
         f"--- BAĞLAM ---\n"
@@ -161,42 +148,35 @@ def generate_answer(query, context):
         f"Soru: {query}"
     )
 
-    try:
-        # Chat completion API'sını çağır
-        messages = [
-            {"role": "system", "content": config.SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ]
+    llm_start = time.time()
 
-        response = _chat_client.complete_chat(messages)
+    with trace_span("rag.llm.generate", {"llm.model": config.CHAT_MODEL, "context_chars": len(context)}):
+        try:
+            messages = [
+                {"role": "system", "content": config.SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ]
 
-        # Cevabı al ve temizle
-        raw_answer = response.choices[0].message.content.strip()
-        answer = _clean_response(raw_answer)
-        return answer
+            response = _chat_client.complete_chat(messages)
+            raw_answer = response.choices[0].message.content.strip()
+            answer = _clean_response(raw_answer)
 
-    except Exception as e:
-        raise RuntimeError(
-            f"Cevap üretilemedi: {e}"
-        ) from e
+            llm_duration = (time.time() - llm_start) * 1000.0
+
+            if trace_ctx:
+                trace_ctx.llm_generation_ms = llm_duration
+                trace_ctx.tokens_count = len(answer.split())
+
+            return answer
+
+        except Exception as e:
+            raise RuntimeError(f"Cevap üretilemedi: {e}") from e
 
 
-def generate_answer_stream(query, context):
+def generate_answer_stream(query, context, trace_ctx=None):
     """
     generate_answer() ile aynı mantık, ancak cevabı parça parça
-    (streaming) döndürür. CLI ve web arayüzünde gerçek zamanlı
-    cevap gösterimi için kullanılır.
-
-    Args:
-        query (str): Kullanıcının sorusu.
-        context (str): Formatlanmış bağlam metni.
-
-    Yields:
-        str: Cevabın her bir parçası (token/kelime grubu).
-
-    Raises:
-        ValueError: query veya context None/boş ise.
-        RuntimeError: Model yüklenemezse veya cevap üretilemezse.
+    (streaming) döndürür.
     """
     if query is None or not query.strip():
         raise ValueError("Soru (query) boş olamaz.")
@@ -213,18 +193,26 @@ def generate_answer_stream(query, context):
         f"Soru: {query}"
     )
 
-    try:
-        messages = [
-            {"role": "system", "content": config.SYSTEM_PROMPT},
-            {"role": "user", "content": user_message},
-        ]
+    llm_start = time.time()
+    token_count = 0
 
-        # Streaming response
-        for chunk in _chat_client.complete_streaming_chat(messages):
-            if chunk.choices and chunk.choices[0].delta.content:
-                yield chunk.choices[0].delta.content
+    with trace_span("rag.llm.generate_stream", {"llm.model": config.CHAT_MODEL, "context_chars": len(context)}):
+        try:
+            messages = [
+                {"role": "system", "content": config.SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ]
 
-    except Exception as e:
-        raise RuntimeError(
-            f"Streaming cevap üretilemedi: {e}"
-        ) from e
+            for chunk in _chat_client.complete_streaming_chat(messages):
+                if chunk.choices and chunk.choices[0].delta.content:
+                    token = chunk.choices[0].delta.content
+                    token_count += len(token.split()) or 1
+                    yield token
+
+            llm_duration = (time.time() - llm_start) * 1000.0
+            if trace_ctx:
+                trace_ctx.llm_generation_ms = llm_duration
+                trace_ctx.tokens_count = token_count
+
+        except Exception as e:
+            raise RuntimeError(f"Streaming cevap üretilemedi: {e}") from e

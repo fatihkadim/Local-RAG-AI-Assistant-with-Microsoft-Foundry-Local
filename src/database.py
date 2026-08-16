@@ -9,6 +9,7 @@ from qdrant_client.http import models
 import uuid
 
 from src import config
+from src.telemetry import trace_span
 
 # Qdrant client'ı başlat
 client = QdrantClient(url=config.QDRANT_URL, check_compatibility=False)
@@ -113,17 +114,18 @@ def insert_chunks_batch(chunks_data):
             )
         )
 
-    try:
-        # 100'erli paketler halinde upsert et (büyük listelerde güvenli bellek yönetimi)
-        BATCH_SIZE = 100
-        for i in range(0, len(points), BATCH_SIZE):
-            batch = points[i:i + BATCH_SIZE]
-            client.upsert(
-                collection_name=config.QDRANT_COLLECTION,
-                points=batch
-            )
-    except Exception as e:
-        raise RuntimeError(f"Qdrant'a toplu chunk eklenemedi: {e}") from e
+    with trace_span("rag.qdrant.upsert_batch", {"chunks_count": len(chunks_data)}):
+        try:
+            # 100'erli paketler halinde upsert et (büyük listelerde güvenli bellek yönetimi)
+            BATCH_SIZE = 100
+            for i in range(0, len(points), BATCH_SIZE):
+                batch = points[i:i + BATCH_SIZE]
+                client.upsert(
+                    collection_name=config.QDRANT_COLLECTION,
+                    points=batch
+                )
+        except Exception as e:
+            raise RuntimeError(f"Qdrant'a toplu chunk eklenemedi: {e}") from e
 
 
 def delete_file_chunks(source_file):

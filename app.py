@@ -1,6 +1,6 @@
 """
 Local RAG AI Assistant — Streamlit Web Arayüzü
-Tarayıcı tabanlı sohbet arayüzü.
+OpenTelemetry Tracing ve Prometheus Metrikleri Entegre Edilmiş Sohbet Arayüzü.
 
 Kullanım:
     streamlit run app.py
@@ -13,13 +13,16 @@ from src import config
 from src import database
 from src import retrieval
 from src import llm
+from src.telemetry import start_query_trace, init_telemetry, get_recent_traces
 
+# Telemetry servisini başlat
+init_telemetry()
 
 # ── Sayfa Ayarları ────────────────────────────────────────────
 st.set_page_config(
     page_title="RAG AI Assistant",
     page_icon="🤖",
-    layout="centered",
+    layout="wide",
 )
 
 # ── Özel CSS ──────────────────────────────────────────────────
@@ -27,20 +30,46 @@ st.markdown("""
 <style>
     .main-header {
         text-align: center;
-        padding: 1rem 0;
+        padding: 0.5rem 0;
     }
-    .source-box {
-        background-color: #f0f2f6;
-        border-radius: 8px;
-        padding: 10px 15px;
-        margin: 5px 0;
-        font-size: 0.85rem;
+    .waterfall-bar {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin: 6px 0;
+        font-family: monospace;
+        font-size: 0.82rem;
+        color: #e2e8f0;
     }
-    .stats-bar {
-        font-size: 0.8rem;
-        color: #888;
-        text-align: right;
-        padding: 5px 0;
+    .badge-trace {
+        background-color: #3b82f6;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-family: monospace;
+    }
+    .badge-embed {
+        background-color: #10b981;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+    }
+    .badge-qdrant {
+        background-color: #f59e0b;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+    }
+    .badge-llm {
+        background-color: #8b5cf6;
+        color: white;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 0.75rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -49,16 +78,16 @@ st.markdown("""
 # ── Başlık ────────────────────────────────────────────────────
 st.markdown("<div class='main-header'>", unsafe_allow_html=True)
 st.title("🤖 Local RAG AI Assistant")
-st.caption("Microsoft Foundry Local ile tamamen offline çalışır")
+st.caption("Microsoft Foundry Local • Rust Parser • OpenTelemetry & Prometheus Observability")
 st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ── Sidebar Bilgileri ─────────────────────────────────────────
+# ── Sidebar Bilgileri & Canlı Observability ───────────────────
 with st.sidebar:
-    st.header("⚙️ Ayarlar")
+    st.header("⚙️ Sistem Ayarları")
     st.markdown(f"**Chat Modeli:** `{config.CHAT_MODEL}`")
-    st.markdown(f"**Embedding Modeli:** `{config.EMBEDDING_MODEL}`")
-    st.markdown(f"**Veritabanı (Qdrant):** `{config.QDRANT_URL}`")
+    st.markdown(f"**Embedding:** `{config.EMBEDDING_MODEL}`")
+    st.markdown(f"**Vektör DB:** `{config.QDRANT_URL}`")
     st.markdown(f"**Top-K:** `{config.TOP_K}`")
 
     st.divider()
@@ -67,22 +96,35 @@ with st.sidebar:
     try:
         chunk_count = database.get_chunk_count()
         sources = database.get_sources()
-        st.success(f"📊 {chunk_count} parça, {len(sources)} kaynak")
+        st.success(f"📊 **{chunk_count}** parça • **{len(sources)}** kaynak yüklü")
         with st.expander("📁 Yüklü Belgeler"):
             for src in sorted(sources):
                 st.markdown(f"- `{src}`")
     except Exception:
-        st.warning("⚠️ Veritabanı bulunamadı!")
-        st.markdown("Önce çalıştırın:\n```\npython main.py --ingest\n```")
+        st.warning("⚠️ Qdrant bağlantısı kurulamadı!")
+        st.markdown("Terminalden çalıştırın:\n```bash\ndocker compose up -d\n```")
 
     st.divider()
-    st.markdown(
-        "**Nasıl çalışır?**\n"
-        "1. Sorunuzu yazın\n"
-        "2. En ilgili belge parçaları bulunur\n"
-        "3. Bağlam ile birlikte LLM cevap üretir\n"
-        "4. Kaynaklar gösterilir"
-    )
+
+    # 📊 Observability & Prometheus Paneli
+    st.subheader("📊 Observability Stack")
+    if config.ENABLE_TELEMETRY:
+        st.markdown(f"🟢 **Tracer:** `{config.OTEL_SERVICE_NAME}`")
+        st.markdown(f"📈 **Prometheus:** [localhost:{config.PROMETHEUS_METRICS_PORT}/metrics](http://localhost:{config.PROMETHEUS_METRICS_PORT}/metrics)")
+        
+        recent = get_recent_traces()
+        if recent:
+            with st.expander(f"⏱️ Son İşlemler ({len(recent)})", expanded=False):
+                for t in recent[:5]:
+                    st.markdown(
+                        f"**{t['query'][:25]}...**\n"
+                        f"- Toplam: `{t['total_ms']:.1f} ms`\n"
+                        f"- Arama: `{t['retrieval_ms']:.1f} ms` | LLM: `{t['llm_generation_ms']:.1f} ms`\n"
+                        f"- Trace: `{t['trace_id'][:12]}...`"
+                    )
+                    st.divider()
+    else:
+        st.info("⚪ Telemetry kapalı (`config.ENABLE_TELEMETRY = False`)")
 
 
 # ── Sohbet Geçmişi (Session State) ───────────────────────────
@@ -93,8 +135,23 @@ if "messages" not in st.session_state:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if "sources" in message:
-            with st.expander("📚 Kaynaklar"):
+        
+        # Waterfall ve Trace bilgisi
+        if "waterfall" in message:
+            wf = message["waterfall"]
+            st.markdown(
+                f"<div class='waterfall-bar'>"
+                f"🏷️ <span class='badge-trace'>{wf['trace_id'][:16]}...</span> "
+                f"⏱️ Toplam: <b>{wf['total_ms']:.0f}ms</b> "
+                f"(<span class='badge-embed'>Embed: {wf['embedding_query_ms']:.0f}ms</span> "
+                f"<span class='badge-qdrant'>Qdrant: {wf['qdrant_search_ms']:.0f}ms</span> "
+                f"<span class='badge-llm'>LLM: {wf['llm_generation_ms']:.0f}ms</span>)"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+        if "sources" in message and message["sources"]:
+            with st.expander("📚 Kullanılan Kaynaklar"):
                 for src in message["sources"]:
                     st.markdown(
                         f"- **{src['source_file']}** "
@@ -104,7 +161,7 @@ for message in st.session_state.messages:
 
 
 # ── Soru Girişi ───────────────────────────────────────────────
-if prompt := st.chat_input("Sorunuzu yazın..."):
+if prompt := st.chat_input("Sorunuzu yazın (örn: Generads fizibilitesi nedir?)..."):
     # Kullanıcı mesajını ekle
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -123,41 +180,43 @@ if prompt := st.chat_input("Sorunuzu yazın..."):
                 st.stop()
         except Exception:
             st.error(
-                "❌ Veritabanı bulunamadı! Önce çalıştırın:\n"
-                "`python main.py --ingest`"
+                "❌ Veritabanı bulunamadı! Önce Docker ve Ingestion çalıştırın:\n"
+                "`docker compose up -d && python main.py --ingest`"
             )
             st.stop()
 
-        with st.spinner("🔍 İlgili belgeler aranıyor..."):
-            start_time = time.time()
-            top_chunks = retrieval.get_top_chunks(prompt)
-            retrieval_time = time.time() - start_time
+        with start_query_trace(prompt) as trace_ctx:
+            with st.spinner("🔍 İlgili belgeler aranıyor..."):
+                top_chunks = retrieval.get_top_chunks(prompt, trace_ctx=trace_ctx)
 
-        if not top_chunks:
-            st.warning("Bu konuda veritabanında bilgi bulunamadı.")
-            st.stop()
+            if not top_chunks:
+                st.warning("Bu konuda veritabanında yeterli bilgi bulunamadı.")
+                st.stop()
 
-        context = retrieval.format_context(top_chunks)
+            context = retrieval.format_context(top_chunks)
 
-        with st.spinner("⏳ Cevap üretiliyor..."):
-            start_time = time.time()
-            answer = llm.generate_answer(prompt, context)
-            llm_time = time.time() - start_time
+            with st.spinner("⏳ Cevap üretiliyor..."):
+                answer = llm.generate_answer(prompt, context, trace_ctx=trace_ctx)
 
         # Cevabı göster
         st.markdown(answer)
 
-        # Süre bilgisi
+        # Waterfall & Observability çubuğu
+        wf_data = trace_ctx.to_dict()
         st.markdown(
-            f"<div class='stats-bar'>"
-            f"⏱️ Arama: {retrieval_time:.2f}s | Üretim: {llm_time:.2f}s"
+            f"<div class='waterfall-bar'>"
+            f"🏷️ <span class='badge-trace'>{wf_data['trace_id'][:16]}...</span> "
+            f"⏱️ Toplam: <b>{wf_data['total_ms']:.0f}ms</b> "
+            f"(<span class='badge-embed'>Embed: {wf_data['embedding_query_ms']:.0f}ms</span> "
+            f"<span class='badge-qdrant'>Qdrant: {wf_data['qdrant_search_ms']:.0f}ms</span> "
+            f"<span class='badge-llm'>LLM: {wf_data['llm_generation_ms']:.0f}ms</span>)"
             f"</div>",
-            unsafe_allow_html=True,
+            unsafe_allow_html=True
         )
 
         # Kaynakları göster
         sources_data = []
-        with st.expander("📚 Kaynaklar"):
+        with st.expander("📚 Kullanılan Kaynaklar"):
             for chunk in top_chunks:
                 st.markdown(
                     f"**{chunk['source_file']}** "
@@ -181,4 +240,5 @@ if prompt := st.chat_input("Sorunuzu yazın..."):
             "role": "assistant",
             "content": answer,
             "sources": sources_data,
+            "waterfall": wf_data,
         })

@@ -52,13 +52,13 @@ def run_ingest(force=False):
         return False
 
 
+from src.telemetry import start_query_trace, init_telemetry
+
+
 def ask_question(query):
     """
     Tek bir soruyu RAG pipeline ile cevaplar.
-
-    1. Sorguyu embed eder ve en ilgili parçaları bulur (retrieval)
-    2. Parçaları bağlam olarak formatlar
-    3. LLM'e gönderir ve cevabı döndürür
+    OpenTelemetry Trace ID ve zaman çizelgesi (waterfall) bilgisi üretir.
 
     Args:
         query (str): Kullanıcının sorusu.
@@ -80,22 +80,19 @@ def ask_question(query):
             "   python main.py --ingest"
         )
 
-    # 1. En ilgili parçaları bul
-    start_time = time.time()
-    top_chunks = retrieval.get_top_chunks(query)
-    retrieval_time = time.time() - start_time
+    with start_query_trace(query) as trace_ctx:
+        # 1. En ilgili parçaları bul
+        top_chunks = retrieval.get_top_chunks(query, trace_ctx=trace_ctx)
 
-    if not top_chunks:
-        return "Bu konuda veritabanında bilgi bulunamadı."
+        if not top_chunks:
+            return "Bu konuda veritabanında bilgi bulunamadı."
 
-    # 2. Bağlam oluştur
-    context = retrieval.format_context(top_chunks)
+        # 2. Bağlam oluştur
+        context = retrieval.format_context(top_chunks)
 
-    # 3. LLM'den cevap üret
-    print("\n⏳ Cevap üretiliyor...\n")
-    start_time = time.time()
-    answer = llm.generate_answer(query, context)
-    llm_time = time.time() - start_time
+        # 3. LLM'den cevap üret
+        print("\n⏳ Cevap üretiliyor...\n")
+        answer = llm.generate_answer(query, context, trace_ctx=trace_ctx)
 
     # Sonuçları göster
     result = []
@@ -109,7 +106,13 @@ def ask_question(query):
             f"(parça {chunk['chunk_index'] + 1}, "
             f"skor: {chunk['score']:.4f})"
         )
-    result.append(f"\n⏱️ Süre: Arama {retrieval_time:.2f}s, Üretim {llm_time:.2f}s")
+    
+    # Observability & Trace bilgisi
+    result.append(f"\n📊 Observability:")
+    result.append(f"   • Trace ID : {trace_ctx.trace_id}")
+    result.append(f"   • Toplam   : {trace_ctx.total_ms:.1f}ms")
+    result.append(f"   • Arama    : {trace_ctx.retrieval_ms:.1f}ms (Embed: {trace_ctx.embedding_query_ms:.1f}ms | Qdrant: {trace_ctx.qdrant_search_ms:.1f}ms)")
+    result.append(f"   • LLM      : {trace_ctx.llm_generation_ms:.1f}ms ({trace_ctx.tokens_count} kelime/token)")
 
     return "\n".join(result)
 

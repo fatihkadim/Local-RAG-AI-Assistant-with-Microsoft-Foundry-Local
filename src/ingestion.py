@@ -19,6 +19,7 @@ import time
 from src import config
 from src import database
 from src import embeddings
+from src.telemetry import trace_span, record_ingestion_metrics
 
 # ── Rust Parser Import (opsiyonel) ────────────────────────────
 
@@ -621,6 +622,8 @@ def ingest_all(directory=None, clear_existing=False):
     }
 
     elapsed = time.time() - start_total_time
+    record_ingestion_metrics(duration_sec=elapsed, documents_count=stats['documents_loaded'])
+
     print("\n" + "=" * 60)
     print("INGESTION TAMAMLANDI")
     print(f"  Toplam Belge     : {stats['documents_loaded']} (Yeni: {len(files_to_process)}, Onbellek: {len(unchanged_files)})")

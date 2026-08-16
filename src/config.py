@@ -41,3 +41,10 @@ Kurallar:
 2. Bağlamda sorunun cevabı yoksa sadece "Bu konuda verilen belgelerde yeterli bilgi bulunmamaktadır." yaz.
 3. Ekstra başlık, etiket ("Parça:", "Soru:", "Cevap:") veya kendini tekrarlayan şablon metinler üretme. Doğrudan tek bir akıcı cevap cümlesi/paragrafı yaz.
 4. Cevap haricinde kaynak adı veya parça numarası yazmana gerek yoktur; bu bilgi arayüz tarafından otomatik gösterilir."""
+
+# ── Observability & Telemetry Ayarları ────────────────────
+ENABLE_TELEMETRY = True                     # OpenTelemetry ve Prometheus aktif mi?
+OTEL_SERVICE_NAME = "local-rag-assistant"   # Tracing servis adı
+PROMETHEUS_METRICS_PORT = 8000              # Prometheus /metrics HTTP endpoint portu
+OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4317" # Jaeger / OTLP gRPC endpoint (opsiyonel)
+OTEL_EXPORTER_OTLP_ENABLED = False          # OTLP collector'a trace gonderilsin mi?
