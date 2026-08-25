@@ -12,7 +12,7 @@ import time
 import functools
 from contextlib import contextmanager
 
-from src import config
+from . import config
 
 # ── Modül Seviyesi Değişkenler ────────────────────────────────
 _initialized = False

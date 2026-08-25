@@ -13,8 +13,8 @@ Kullanım:
     print(cevap)
 """
 
-from src import config
-from src.sdk_manager import get_manager
+from . import config
+from .sdk_manager import get_manager
 
 # ── Modül Seviyesi Değişkenler (Lazy Initialization) ─────────
 _chat_client = None
@@ -115,7 +115,7 @@ def _clean_response(text: str) -> str:
     return cleaned
 
 
-from src.telemetry import trace_span
+from .telemetry import trace_span
 import time
 
 

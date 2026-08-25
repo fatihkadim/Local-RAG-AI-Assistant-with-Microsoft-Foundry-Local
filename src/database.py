@@ -2,17 +2,32 @@
 Veritabanı (veri kalıcılık) katmanı.
 Qdrant kullanarak belge parçalarını (chunk) ve embedding vektörlerini
 kaydetme, okuma ve arama işlemlerini yönetir.
+
+Encrypted Document Vault Entegrasyonu:
+    - VAULT_ENCRYPT_PAYLOADS aktifken chunk metinleri şifreli kaydedilir
+    - Arama sonuçları otomatik olarak decrypt edilir
 """
 
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 import uuid
 
-from src import config
-from src.telemetry import trace_span
+from . import config
+from .telemetry import trace_span
 
 # Qdrant client'ı başlat
 client = QdrantClient(url=config.QDRANT_URL, check_compatibility=False)
+
+
+def _get_vault_manager():
+    """Aktif VaultManager'i dondurur (yoksa None)."""
+    if not config.VAULT_ENABLED or not config.VAULT_ENCRYPT_PAYLOADS:
+        return None
+    try:
+        from .vault import get_vault_manager
+        return get_vault_manager()
+    except ImportError:
+        return None
 
 
 def init_db():
@@ -50,9 +65,30 @@ def clear_db():
         raise RuntimeError(f"Qdrant koleksiyonu silinemedi: {e}") from e
 
 
+def _encrypt_payload_text(text):
+    """Vault aktifken metni sifreler, degilse aynen dondurur."""
+    vm = _get_vault_manager()
+    if vm:
+        return vm.encrypt_text(text)
+    return text
+
+
+def _decrypt_payload_text(text):
+    """Vault aktifken metni cozer, degilse aynen dondurur."""
+    vm = _get_vault_manager()
+    if vm:
+        try:
+            return vm.decrypt_text(text)
+        except Exception:
+            # Sifrelenmemis eski veri olabilir, aynen dondur
+            return text
+    return text
+
+
 def insert_chunk(text, embedding, source_file, chunk_index):
     """
     Bir belge parçasını (chunk) ve embedding vektörünü Qdrant'a ekler.
+    Vault aktifken metin payload'u şifrelenmiş olarak kaydedilir.
     """
     if not text:
         raise ValueError("Belge parçası metni (text) boş olamaz.")
@@ -62,10 +98,14 @@ def insert_chunk(text, embedding, source_file, chunk_index):
     # Benzersiz bir UUID oluştur
     point_id = str(uuid.uuid4())
 
+    # Vault aktifken metni sifrele
+    stored_text = _encrypt_payload_text(text)
+
     payload = {
-        "text": text,
+        "text": stored_text,
         "source_file": source_file,
-        "chunk_index": chunk_index
+        "chunk_index": chunk_index,
+        "encrypted": _get_vault_manager() is not None,
     }
 
     try:
@@ -87,6 +127,7 @@ def insert_chunks_batch(chunks_data):
     """
     Birden fazla belge parçasını tek bir toplu (bulk) işlemle Qdrant'a ekler.
     Tek tek HTTP istekleri atmak yerine tek bir ağ çağrısında kaydeder (10x-50x daha hızlı).
+    Vault aktifken metin payload'ları şifrelenmiş olarak kaydedilir.
     
     Args:
         chunks_data (list[dict]): Her eleman şu anahtarları içermelidir:
@@ -98,13 +139,20 @@ def insert_chunks_batch(chunks_data):
     if not chunks_data:
         return
 
+    is_encrypted = _get_vault_manager() is not None
+
     points = []
     for item in chunks_data:
         point_id = str(uuid.uuid4())
+
+        # Vault aktifken metni sifrele
+        stored_text = _encrypt_payload_text(item["text"])
+
         payload = {
-            "text": item["text"],
+            "text": stored_text,
             "source_file": item["source_file"],
-            "chunk_index": item["chunk_index"]
+            "chunk_index": item["chunk_index"],
+            "encrypted": is_encrypted,
         }
         points.append(
             models.PointStruct(
@@ -179,9 +227,10 @@ def get_sources():
 def search_chunks(query_vector, top_k=3):
     """
     Verilen sorgu vektörüne en yakın top_k belge parçasını arar.
+    Vault aktifken sonuçlardaki metin payload'ları otomatik decrypt edilir.
     
     Returns:
-        list[dict]: Benzer belge parçaları.
+        list[dict]: Benzer belge parçaları (metin çözülmüş halde).
     """
     try:
         search_result = client.query_points(
@@ -193,9 +242,17 @@ def search_chunks(query_vector, top_k=3):
         results = []
         for scored_point in search_result.points:
             payload = scored_point.payload
+            raw_text = payload.get("text", "")
+
+            # Vault aktifken ve payload sifreliyse decrypt et
+            if payload.get("encrypted", False):
+                text = _decrypt_payload_text(raw_text)
+            else:
+                text = raw_text
+
             results.append({
                 "id": scored_point.id,
-                "text": payload.get("text", ""),
+                "text": text,
                 "source_file": payload.get("source_file", ""),
                 "chunk_index": payload.get("chunk_index", 0),
                 "score": scored_point.score

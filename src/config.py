@@ -48,3 +48,11 @@ OTEL_SERVICE_NAME = "local-rag-assistant"   # Tracing servis adı
 PROMETHEUS_METRICS_PORT = 8000              # Prometheus /metrics HTTP endpoint portu
 OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4317" # Jaeger / OTLP gRPC endpoint (opsiyonel)
 OTEL_EXPORTER_OTLP_ENABLED = False          # OTLP collector'a trace gonderilsin mi?
+
+# ── Encrypted Document Vault Ayarları ─────────────────────
+VAULT_ENABLED = True                        # Vault şifreleme aktif (zorunlu mod)
+VAULT_DIR = "vault"                         # Şifrelenmiş dosyaların saklanacağı klasör
+VAULT_META_FILE = ".vault_meta.json"        # Vault metadata dosyası
+VAULT_PBKDF2_ITERATIONS = 600_000          # PBKDF2 iterasyon sayısı (güvenlik seviyesi)
+VAULT_ENCRYPT_PAYLOADS = True               # Qdrant payload'larını da şifrele
+

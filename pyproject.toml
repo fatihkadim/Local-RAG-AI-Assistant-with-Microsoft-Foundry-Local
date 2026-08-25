@@ -22,4 +22,6 @@ dependencies = [
     "opentelemetry-sdk>=1.20.0",
     "prometheus-client>=0.20.0",
     "requests>=2.30.0",
+    # Encrypted Document Vault (AES-256-GCM)
+    "cryptography>=42.0.0",
 ]

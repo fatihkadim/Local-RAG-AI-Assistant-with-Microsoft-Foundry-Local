@@ -35,6 +35,8 @@ def test(name, condition, detail=""):
         FAILED += 1
         print(f"  [FAIL] {name} -- {detail}")
 
+test.__test__ = False
+
 def skip(name, reason):
     global SKIPPED
     SKIPPED += 1
@@ -461,6 +463,5 @@ if FAILED > 0:
     print("  BAZI TESTLER BASARISIZ!")
 else:
     print("  TUMU BASARILI!")
-print("=" * 60)
-
-sys.exit(0 if FAILED == 0 else 1)
+if __name__ == "__main__":
+    sys.exit(0 if FAILED == 0 else 1)

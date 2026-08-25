@@ -3,10 +3,10 @@ Retrieval (belge arama) modulu.
 Kullanici sorgusuna en benzer belge parcalarini bulur.
 """
 
-from src import config
-from src import database
-from src import embeddings
-from src.telemetry import trace_span
+from . import config
+from . import database
+from . import embeddings
+from .telemetry import trace_span
 import time
 
 

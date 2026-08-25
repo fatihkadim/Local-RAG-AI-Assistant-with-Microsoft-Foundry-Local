@@ -16,10 +16,10 @@ import json
 import hashlib
 import time
 
-from src import config
-from src import database
-from src import embeddings
-from src.telemetry import trace_span, record_ingestion_metrics
+from . import config
+from . import database
+from . import embeddings
+from .telemetry import trace_span, record_ingestion_metrics
 
 # ── Rust Parser Import (opsiyonel) ────────────────────────────
 
@@ -345,6 +345,46 @@ def _parse_file(filepath, ext):
     return _parse_with_python(filepath, ext)
 
 
+def _parse_vault_file(vault_filepath, vm):
+    """
+    .vault dosyasini cozer ve icerigini uygun parser ile ayristirir.
+
+    Args:
+        vault_filepath (str): .vault dosyasinin yolu.
+        vm (VaultManager): Aktif VaultManager nesnesi.
+
+    Returns:
+        tuple: (original_filename, content_str)
+    """
+    if vm is None:
+        raise RuntimeError("Vault kilitli veya VaultManager baslatilmamis.")
+
+    original_name, raw_bytes = vm.decrypt_file(vault_filepath)
+    ext = os.path.splitext(original_name)[1].lower()
+
+    # Duz metin formatlari ise dogrudan decode edebiliriz
+    if ext in (".txt", ".md", ".rst"):
+        try:
+            return original_name, raw_bytes.decode("utf-8").strip()
+        except UnicodeDecodeError:
+            return original_name, raw_bytes.decode("latin-1").strip()
+
+    # Binary veya ozel yapisal formatlar (pdf, docx, pptx, xlsx, epub, html, csv, json)
+    import tempfile
+    with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+        tmp.write(raw_bytes)
+        tmp_path = tmp.name
+
+    try:
+        content = _parse_file(tmp_path, ext)
+        return original_name, content
+    finally:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
 # ── Belge Yukleme ─────────────────────────────────────────────
 
 def load_documents(directory=None):
@@ -358,6 +398,7 @@ def load_documents(directory=None):
     supported_extensions = config.SUPPORTED_EXTENSIONS
     documents = []
 
+    # 1. Normal (sifrelenmemis) dosyalari tara
     for ext in supported_extensions:
         pattern = os.path.join(directory, f"*{ext}")
         for filepath in sorted(glob.glob(pattern)):
@@ -381,6 +422,33 @@ def load_documents(directory=None):
             except Exception as e:
                 print(f"  [UYARI] {filename} okunamadi ({e}), atlaniyor.")
                 continue
+
+    # 2. Vault dosyalarini tara (vault aktifse)
+    if config.VAULT_ENABLED and os.path.isdir(config.VAULT_DIR):
+        try:
+            from .vault import get_vault_manager
+            vm = get_vault_manager()
+            if vm:
+                vault_pattern = os.path.join(config.VAULT_DIR, "*.vault")
+                for vault_path in sorted(glob.glob(vault_pattern)):
+                    vault_filename = os.path.basename(vault_path)
+                    try:
+                        original_name, content = _parse_vault_file(vault_path, vm)
+                        if not content or not content.strip():
+                            continue
+
+                        documents.append({
+                            "filename": original_name,
+                            "filepath": vault_path,
+                            "content": content,
+                        })
+                        print(f"  [OK] 🔓 {original_name} vault'tan cozuldu ({len(content)} karakter)")
+
+                    except Exception as e:
+                        print(f"  [UYARI] {vault_filename} cozulemedi ({e}), atlaniyor.")
+                        continue
+        except ImportError:
+            pass
 
     if not documents:
         raise ValueError(f"'{directory}' klasorunde desteklenen belge bulunamadi.")
@@ -478,6 +546,8 @@ def ingest_all(directory=None, clear_existing=False):
     print("INGESTION PIPELINE (AKILLI ONBELLEK & BULK)")
     print(f"  Motor : {'Rust (yuksek performans)' if RUST_PARSER_AVAILABLE else 'Python (fallback)'}")
     print(f"  Mod   : {'Sıfırdan Tam Yükleme (--force)' if clear_existing else 'Akıllı Artımlı (Incremental Cache)'}")
+    if config.VAULT_ENABLED:
+        print(f"  Vault : 🔐 Aktif (Payload Sifreleme: {'Evet' if config.VAULT_ENCRYPT_PAYLOADS else 'Hayir'})")
     print("=" * 60)
 
     if directory is None:
@@ -509,6 +579,16 @@ def ingest_all(directory=None, clear_existing=False):
             filename = os.path.basename(filepath)
             if not filename.startswith("."):
                 current_files[filename] = filepath
+
+    # Vault dosyalarini da tara
+    if config.VAULT_ENABLED and os.path.isdir(config.VAULT_DIR):
+        for filepath in glob.glob(os.path.join(config.VAULT_DIR, "*.vault")):
+            vault_filename = os.path.basename(filepath)
+            if not vault_filename.startswith("."):
+                # Orijinal dosya adini vault_filename'den cikar (xxx.txt.vault -> xxx.txt)
+                original_name = vault_filename.rsplit(".vault", 1)[0]
+                if original_name not in current_files:
+                    current_files[original_name] = filepath
 
     files_to_process = []
     unchanged_files = []
@@ -554,11 +634,28 @@ def ingest_all(directory=None, clear_existing=False):
 
     # 3. Yeni/Degisen Belgeleri Oku ve Parcala
     print(f"\n[3/4] Yeni/Guncellenen belgeler okunuyor ve parcalaniyor ({len(files_to_process)} belge)...")
+
+    vm = None
+    if config.VAULT_ENABLED:
+        try:
+            from .vault import get_vault_manager
+            vm = get_vault_manager()
+        except ImportError:
+            pass
+
     new_chunks = []
     for filename, filepath, fhash in files_to_process:
         ext = os.path.splitext(filename)[1].lower()
+        is_vault = filepath.lower().endswith(".vault")
         try:
-            content = _parse_file(filepath, ext)
+            if is_vault:
+                if vm is None:
+                    print(f"  [UYARI] {filename} vault dosyasi fakat Vault kilitli! Atlaniyor.")
+                    continue
+                _, content = _parse_vault_file(filepath, vm)
+            else:
+                content = _parse_file(filepath, ext)
+
             if not content or not content.strip():
                 continue
 
@@ -570,7 +667,10 @@ def ingest_all(directory=None, clear_existing=False):
                 "chars_count": len(content),
                 "timestamp": time.time(),
             }
-            parser_type = "Rust" if (RUST_PARSER_AVAILABLE and ext != ".pdf") else "Python"
+            if is_vault:
+                parser_type = "Vault+Rust" if (RUST_PARSER_AVAILABLE and ext != ".pdf") else "Vault+Python"
+            else:
+                parser_type = "Rust" if (RUST_PARSER_AVAILABLE and ext != ".pdf") else "Python"
             print(f"  [OK] {filename} -> {len(doc_chunks)} parca ({len(content)} kar.) [{parser_type}]")
         except Exception as e:
             print(f"  [UYARI] {filename} okunamadi ({e}), atlaniyor.")

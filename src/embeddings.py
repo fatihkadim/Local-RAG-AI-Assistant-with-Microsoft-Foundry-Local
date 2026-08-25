@@ -14,8 +14,8 @@ Kullanim:
     vektorler = get_embeddings_batch(["metin1", "metin2", "metin3"])
 """
 
-from src import config
-from src.sdk_manager import get_manager
+from . import config
+from .sdk_manager import get_manager
 
 # ── Modul Seviyesi Degiskenler (Lazy Initialization) ─────────
 # Embedding client ilk kullanimda olusturulur.

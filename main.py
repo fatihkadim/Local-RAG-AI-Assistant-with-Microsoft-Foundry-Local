@@ -10,6 +10,12 @@ Kullanım:
     python main.py --ingest     → Belgeleri yükle ve veritabanını oluştur
     python main.py              → Soru-Cevap modunu başlat (CLI)
     python main.py --ingest -q "Python nedir?"  → Yükle + tek soru sor
+
+Vault Komutları:
+    python main.py --vault-init     → Yeni vault oluştur (ilk kez şifre belirle)
+    python main.py --vault-migrate  → Mevcut belgeleri vault'a şifreli taşı
+    python main.py --vault-status   → Vault durumunu göster
+    python main.py --ingest         → Vault aktifken şifreli ingestion
 """
 
 import argparse
@@ -29,12 +35,111 @@ from src import retrieval
 from src import llm
 
 
+def _ensure_vault():
+    """
+    Vault aktifse interaktif olarak vault'u baslatir.
+    Zaten aciksa tekrar sormaz.
+    """
+    if not config.VAULT_ENABLED:
+        return
+
+    from src.vault import get_vault_manager, init_vault_interactive
+    if get_vault_manager() is None:
+        init_vault_interactive()
+
+
+def run_vault_init():
+    """Yeni vault olusturur veya mevcut vault'u dogrular."""
+    from src.vault import init_vault_interactive
+    print("\n" + "=" * 60)
+    print("  🔐 ENCRYPTED DOCUMENT VAULT — İLK KURULUM")
+    print("=" * 60 + "\n")
+    try:
+        vm = init_vault_interactive()
+        status = vm.get_vault_status()
+        print(f"\n✅ Vault hazır!")
+        print(f"   Klasör: {status['vault_dir']}")
+        print(f"   Şifreli dosya: {status['vault_files_count']}")
+        print(f"   Versiyon: {status['version']}\n")
+    except Exception as e:
+        print(f"\n❌ Vault oluşturulamadı: {e}\n")
+        sys.exit(1)
+
+
+def run_vault_migrate():
+    """Mevcut sifrenmemis belgeleri vault'a goc ettirir."""
+    from src.vault import init_vault_interactive
+
+    print("\n" + "=" * 60)
+    print("  🔐 VAULT GÖÇ — Belgeleri Şifreli Olarak Taşı")
+    print("=" * 60 + "\n")
+
+    try:
+        vm = init_vault_interactive()
+        print(f"\n📂 '{config.DOCUMENTS_DIR}/' klasöründeki belgeler vault'a taşınıyor...\n")
+        stats = vm.migrate_documents()
+
+        print("\n" + "=" * 60)
+        print("GÖÇ TAMAMLANDI")
+        print(f"  Taşınan belge  : {stats['migrated_count']}")
+        print(f"  Başarısız       : {stats['failed_count']}")
+        print("=" * 60 + "\n")
+
+        if stats['migrated_count'] > 0:
+            print("💡 Artık şifreli belgeleri kullanmak için normal ingestion çalıştırın:")
+            print("   python main.py --ingest\n")
+
+    except Exception as e:
+        print(f"\n❌ Göç başarısız: {e}\n")
+        sys.exit(1)
+
+
+def run_vault_status():
+    """Vault durumunu gosterir."""
+    import os
+
+    print("\n" + "=" * 60)
+    print("  🔐 VAULT DURUM BİLGİSİ")
+    print("=" * 60 + "\n")
+
+    vault_meta_path = os.path.join(config.VAULT_DIR, config.VAULT_META_FILE)
+
+    if not os.path.exists(vault_meta_path):
+        print("  ⚪ Vault henüz oluşturulmamış.")
+        print("  Oluşturmak için: python main.py --vault-init\n")
+        return
+
+    try:
+        from src.vault import init_vault_interactive
+        vm = init_vault_interactive()
+        status = vm.get_vault_status()
+
+        print(f"  🟢 Vault Aktif")
+        print(f"  Klasör         : {status['vault_dir']}")
+        print(f"  Versiyon       : {status['version']}")
+        print(f"  Şifreli dosya  : {status['vault_files_count']}")
+        if status['vault_files']:
+            print(f"  Dosyalar:")
+            for vf in status['vault_files'][:10]:
+                print(f"    • {vf}")
+            if len(status['vault_files']) > 10:
+                print(f"    ... ve {len(status['vault_files']) - 10} dosya daha")
+        print()
+
+    except Exception as e:
+        print(f"  ❌ Vault durumu okunamadı: {e}\n")
+
+
 def run_ingest(force=False):
     """
     Ingestion pipeline'ını çalıştırır.
     documents/ klasöründeki belgeleri okur, parçalar,
     embedding hesaplar ve Qdrant'a kaydeder.
+    Vault aktifken şifreli belgeler de işlenir.
     """
+    # Vault aktifse önce vault'u aç
+    _ensure_vault()
+
     try:
         stats = ingestion.ingest_all(clear_existing=force)
         print(f"\n✅ Ingestion tamamlandı: Toplam {stats['total_chunks']} parça veritabanında.")
@@ -123,6 +228,9 @@ def run_cli():
     Kullanıcıdan soru alır, RAG pipeline ile cevaplar,
     'çık', 'exit' veya 'q' girilene kadar devam eder.
     """
+    # Vault aktifse önce vault'u aç
+    _ensure_vault()
+
     print("\n" + "═" * 60)
     print("  🤖 Local RAG AI Assistant")
     print("  Microsoft Foundry Local ile çalışır (tamamen offline)")
@@ -130,6 +238,8 @@ def run_cli():
     print(f"  Model  : {config.CHAT_MODEL}")
     print(f"  DB     : {config.QDRANT_URL} ({config.QDRANT_COLLECTION})")
     print(f"  Top-K  : {config.TOP_K}")
+    if config.VAULT_ENABLED:
+        print(f"  Vault  : 🔒 Aktif (E2E Encrypted)")
     print("─" * 60)
     print("  Çıkmak için: 'çık', 'exit' veya 'q' yazın")
     print("═" * 60 + "\n")
@@ -177,13 +287,18 @@ def run_cli():
 def main():
     """Ana fonksiyon — komut satırı argümanlarını işler."""
     parser = argparse.ArgumentParser(
-        description="Local RAG AI Assistant — Offline Q&A Chatbot",
+        description="Local RAG AI Assistant — Offline Q&A Chatbot (E2E Encrypted Vault)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Örnekler:
-  python main.py --ingest           Belgeleri yükle
+  python main.py --ingest           Belgeleri yükle (vault aktifse şifre sorar)
   python main.py                    Sohbet modunu başlat
   python main.py -q "Python nedir?" Tek soru sor
+
+Vault Komutları:
+  python main.py --vault-init       Yeni vault oluştur
+  python main.py --vault-migrate    Mevcut belgeleri vault'a şifreli taşı
+  python main.py --vault-status     Vault durumunu göster
         """
     )
     parser.add_argument(
@@ -201,8 +316,36 @@ def main():
         type=str,
         help="Tek bir soru sor (sohbet moduna girmeden)"
     )
+    parser.add_argument(
+        "--vault-init",
+        action="store_true",
+        help="Yeni encrypted vault oluştur (ilk kez şifre belirle)"
+    )
+    parser.add_argument(
+        "--vault-migrate",
+        action="store_true",
+        help="Mevcut şifresiz belgeleri vault'a şifreli olarak taşı"
+    )
+    parser.add_argument(
+        "--vault-status",
+        action="store_true",
+        help="Vault durumunu göster (şifreli dosya sayısı vb.)"
+    )
 
     args = parser.parse_args()
+
+    # Vault komutları (öncelikli)
+    if args.vault_init:
+        run_vault_init()
+        return
+
+    if args.vault_migrate:
+        run_vault_migrate()
+        return
+
+    if args.vault_status:
+        run_vault_status()
+        return
 
     # Veritabanını initialize et
     database.init_db()
@@ -215,6 +358,7 @@ def main():
 
     # -q ile tek soru
     if args.query:
+        _ensure_vault()
         try:
             answer = ask_question(args.query)
             print(answer)

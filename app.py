@@ -1,6 +1,7 @@
 """
 Local RAG AI Assistant — Streamlit Web Arayüzü
 OpenTelemetry Tracing ve Prometheus Metrikleri Entegre Edilmiş Sohbet Arayüzü.
+End-to-End Encrypted Document Vault desteği.
 
 Kullanım:
     streamlit run app.py
@@ -71,6 +72,22 @@ st.markdown("""
         border-radius: 4px;
         font-size: 0.75rem;
     }
+    .vault-locked {
+        background: linear-gradient(135deg, #991b1b 0%, #7f1d1d 100%);
+        border: 1px solid #dc2626;
+        border-radius: 8px;
+        padding: 12px;
+        text-align: center;
+        color: #fecaca;
+    }
+    .vault-unlocked {
+        background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
+        border: 1px solid #10b981;
+        border-radius: 8px;
+        padding: 12px;
+        text-align: center;
+        color: #a7f3d0;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -78,7 +95,7 @@ st.markdown("""
 # ── Başlık ────────────────────────────────────────────────────
 st.markdown("<div class='main-header'>", unsafe_allow_html=True)
 st.title("🤖 Local RAG AI Assistant")
-st.caption("Microsoft Foundry Local • Rust Parser • OpenTelemetry & Prometheus Observability")
+st.caption("Microsoft Foundry Local • Rust Parser • OpenTelemetry & Prometheus Observability • 🔐 E2E Encrypted Vault")
 st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -91,6 +108,90 @@ with st.sidebar:
     st.markdown(f"**Top-K:** `{config.TOP_K}`")
 
     st.divider()
+
+    # ── 🔐 Vault Bölümü ──────────────────────────────────────
+    if config.VAULT_ENABLED:
+        st.subheader("🔐 Encrypted Vault")
+
+        # Vault durumu session state'de takip ediliyor
+        if "vault_unlocked" not in st.session_state:
+            st.session_state.vault_unlocked = False
+        if "vault_manager" not in st.session_state:
+            st.session_state.vault_manager = None
+
+        if not st.session_state.vault_unlocked:
+            st.markdown(
+                "<div class='vault-locked'>🔒 Vault Kilitli</div>",
+                unsafe_allow_html=True
+            )
+            st.markdown("")
+
+            vault_password = st.text_input(
+                "Vault Şifresi",
+                type="password",
+                placeholder="Master şifrenizi girin...",
+                key="vault_password_input"
+            )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                unlock_btn = st.button("🔓 Aç", use_container_width=True)
+            with col2:
+                init_btn = st.button("🆕 Oluştur", use_container_width=True)
+
+            if unlock_btn and vault_password:
+                try:
+                    from src.vault import init_vault_with_password
+                    vm = init_vault_with_password(vault_password)
+                    st.session_state.vault_unlocked = True
+                    st.session_state.vault_manager = vm
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ {e}")
+
+            if init_btn and vault_password:
+                if len(vault_password) < 8:
+                    st.error("Şifre en az 8 karakter olmalıdır.")
+                else:
+                    try:
+                        from src.vault import init_vault_with_password
+                        vm = init_vault_with_password(vault_password)
+                        st.session_state.vault_unlocked = True
+                        st.session_state.vault_manager = vm
+                        st.success("✅ Vault oluşturuldu!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ {e}")
+
+        else:
+            st.markdown(
+                "<div class='vault-unlocked'>🔓 Vault Açık</div>",
+                unsafe_allow_html=True
+            )
+            st.markdown("")
+
+            # Vault durumunu goster
+            vm = st.session_state.vault_manager
+            if vm:
+                status = vm.get_vault_status()
+                st.markdown(f"📁 **{status['vault_files_count']}** şifreli dosya")
+                st.markdown(f"🔑 Versiyon: `{status['version']}`")
+
+                with st.expander("📦 Vault Dosyaları"):
+                    if status['vault_files']:
+                        for vf in status['vault_files']:
+                            st.markdown(f"- `{vf}`")
+                    else:
+                        st.info("Henüz şifreli dosya yok.")
+
+            if st.button("🔒 Kilitle", use_container_width=True):
+                from src.vault import set_vault_manager
+                set_vault_manager(None)
+                st.session_state.vault_unlocked = False
+                st.session_state.vault_manager = None
+                st.rerun()
+
+        st.divider()
 
     # Veritabanı durumu
     try:
@@ -125,6 +226,13 @@ with st.sidebar:
                     st.divider()
     else:
         st.info("⚪ Telemetry kapalı (`config.ENABLE_TELEMETRY = False`)")
+
+
+# ── Vault Kilit Kontrolü ──────────────────────────────────────
+# Vault aktifken ve kilitliyken sohbet alanını engelle
+if config.VAULT_ENABLED and not st.session_state.get("vault_unlocked", False):
+    st.warning("🔒 **Vault kilitli.** Sohbet başlatmak için sol panelden vault şifrenizi girin.")
+    st.stop()
 
 
 # ── Sohbet Geçmişi (Session State) ───────────────────────────
